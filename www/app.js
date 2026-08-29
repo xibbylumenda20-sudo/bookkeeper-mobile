@@ -9,7 +9,33 @@ const KEY="bookkeeper_mobile_v1";
 const sample=[
 {"id":"J-0001","date":"2026-08-01","description":"Opening capital","debit":"Cash","debitAmount":50000,"credit":"Owner Capital","creditAmount":50000}
 ];
-let state=JSON.parse(localStorage.getItem(KEY)||"null")||{transactions:sample};
+const SAMPLE_MODE_KEY = `${KEY}_sample_mode`;
+let state = (() => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (raw && Array.isArray(raw.transactions) && raw.transactions.length > 0 && localStorage.getItem(SAMPLE_MODE_KEY) !== "true") {
+      return { transactions: [] };
+    }
+    if (raw && Array.isArray(raw.transactions)) {
+      return raw;
+    }
+  } catch (error) {
+    // Ignore stale or malformed saved state and fall back to a blank fresh install.
+  }
+  return { transactions: [] };
+})();
+
+function loadSampleData(){
+  localStorage.setItem(SAMPLE_MODE_KEY, "true");
+  state={transactions:sample};
+  save();
+}
+
+function clearDemoData(){
+  localStorage.removeItem(SAMPLE_MODE_KEY);
+  state={transactions:[]};
+  save();
+}
 
 const money=n=>"₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const acctNames=COA.map(x=>x[1]);
@@ -216,7 +242,7 @@ document.querySelectorAll("[data-phase8-action]").forEach((button) => {
 });
 exportBtn.onclick=()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="bookkeeper-backup.json";a.click();URL.revokeObjectURL(a.href)};
 importFile.onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!Array.isArray(x.transactions))throw 0;state=x;save();alert("Backup restored.");}catch{alert("Invalid backup file.")}};r.readAsText(f)};
-resetBtn.onclick=()=>{if(confirm("Reset to sample data? This deletes data stored in this browser.")){state={transactions:sample};save()}};
+resetBtn.onclick=()=>{if(confirm("Load sample data? This replaces the current browser data.")){loadSampleData();}else{clearDemoData();}};
 let deferredPrompt;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.classList.remove("hidden")});installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;installBtn.classList.add("hidden")}};
 if("serviceWorker" in navigator) navigator.serviceWorker.register("service-worker.js");
 renderAccounts();date.value=new Date().toISOString().slice(0,10);renderAll();renderValidation();
