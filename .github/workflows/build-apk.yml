@@ -12,15 +12,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "21"
@@ -29,25 +29,6 @@ jobs:
         run: |
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
-
-      - name: Prepare web files
-        run: |
-          mkdir -p www
-          cp index.html www/
-          cp style.css www/
-          cp app.js www/
-          cp manifest.json www/
-          cp service-worker.js www/
-
-      - name: Create Capacitor config
-        run: |
-          cat > capacitor.config.json <<'EOF'
-          {
-            "appId": "com.bookkeeper.mobile",
-            "appName": "Bookkeeper Mobile",
-            "webDir": "www"
-          }
-          EOF
 
       - name: Add Android platform
         run: npx cap add android

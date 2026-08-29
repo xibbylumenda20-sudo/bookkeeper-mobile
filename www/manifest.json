@@ -1,0 +1,10 @@
+{
+  "name": "Bookkeeper Mobile",
+  "short_name": "Bookkeeper",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#111827",
+  "description": "Offline-first mobile bookkeeping app",
+  "icons": []
+}
