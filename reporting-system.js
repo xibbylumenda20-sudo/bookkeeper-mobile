@@ -787,19 +787,19 @@ class ReportingSystem {
     const { companyId, startDate: rangeStart, endDate: rangeEnd } = this.normalizeArgs(companyIdOrOptions, startDate, endDate);
     if (!companyId) return [];
     const rows = [];
-    for (const transaction of this.transactionService.listTransactions(companyId, { status: TransactionStatus.POSTED })) {
-      if (!isDateInRange(transaction.date, rangeStart, rangeEnd)) continue;
-      for (const line of transaction.lines || []) {
+    for (const entry of this.engine.getPostedEntries(companyId)) {
+      if (!isDateInRange(entry.date, rangeStart, rangeEnd)) continue;
+      for (const line of entry.lines || []) {
         const account = this.engine.getAccountById(line.accountId);
         rows.push({
-          date: transaction.date,
-          reference: transaction.reference,
-          description: transaction.description,
-          transactionType: transaction.type,
+          date: entry.date,
+          reference: entry.reference,
+          description: entry.description,
+          transactionType: 'Journal Entry',
           account: account ? `${account.code} - ${account.title}` : line.accountId,
-          debit: line.debit || 0,
-          credit: line.credit || 0,
-          status: transaction.status,
+          debit: line.entryType === EntryType.DEBIT ? (Number(line.amount) || 0) : 0,
+          credit: line.entryType === EntryType.CREDIT ? (Number(line.amount) || 0) : 0,
+          status: entry.status,
         });
       }
     }
