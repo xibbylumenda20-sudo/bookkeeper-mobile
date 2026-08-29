@@ -5,7 +5,7 @@ const {
   EntryType,
   TransactionStatus,
   BookkeeperEngine,
-} = require('./accounting-engine.js');
+} = typeof module !== 'undefined' && module.exports ? require('./accounting-engine.js') : window;
 
 function safeNumber(value) {
   const number = Number(value);

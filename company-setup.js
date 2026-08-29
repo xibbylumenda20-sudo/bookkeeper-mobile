@@ -2,10 +2,8 @@
 const {
   AccountType,
   BookkeeperEngine,
-  Company,
-  Account,
   NormalBalance,
-} = require('./accounting-engine.js');
+} = typeof module !== 'undefined' && module.exports ? require('./accounting-engine.js') : window;
 
 const STORAGE_VERSION = 1;
 
@@ -176,8 +174,8 @@ class CompanySetupService {
       }
 
       const restored = new BookkeeperEngine();
-      restored.companies = (parsed?.engineData?.companies || []).map((company) => new Company(company));
-      restored.accounts = (parsed?.engineData?.accounts || []).map((account) => new Account(account));
+      restored.companies = parsed?.engineData?.companies || [];
+      restored.accounts = parsed?.engineData?.accounts || [];
       restored.journalEntries = parsed?.engineData?.journalEntries || [];
       restored.journalLines = parsed?.engineData?.journalLines || [];
       restored.transactions = parsed?.engineData?.transactions || [];
