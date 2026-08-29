@@ -24,7 +24,7 @@ jobs:
         run: |
           rm -rf buildapp
           cordova create buildapp com.bookkeeper.mobile "Bookkeeper Mobile"
-          cp -r app/. buildapp/www/
+          cp -r . buildapp/www/
           cd buildapp
           cordova platform add android
           cordova build android --debug
