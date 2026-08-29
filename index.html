@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="description" content="Offline-first mobile bookkeeping app">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>Bookkeeper Mobile</title>
+</head>
+<body>
+<header class="topbar">
+  <div><h1>Bookkeeper</h1><small>Mobile • Offline</small></div>
+  <button id="installBtn" class="ghost hidden">Install</button>
+</header>
+
+<main>
+  <section id="dashboard" class="screen active">
+    <div class="status-card">
+      <span>Bookkeeping Status</span>
+      <strong id="overallStatus">READY</strong>
+    </div>
+    <div class="cards">
+      <div class="card"><small>Cash</small><b id="cash">₱0.00</b></div>
+      <div class="card"><small>Total Assets</small><b id="assets">₱0.00</b></div>
+      <div class="card"><small>Revenue</small><b id="revenue">₱0.00</b></div>
+      <div class="card"><small>Expenses</small><b id="expenses">₱0.00</b></div>
+      <div class="card"><small>Net Income</small><b id="netIncome">₱0.00</b></div>
+    </div>
+    <button class="primary big" data-go="entry">＋ New Transaction</button>
+    <div class="section-title">Recent Transactions</div>
+    <div id="recent"></div>
+  </section>
+
+  <section id="entry" class="screen">
+    <div class="section-head"><button class="back" data-go="dashboard">‹</button><h2>New Transaction</h2></div>
+    <form id="txForm">
+      <label>Date<input id="date" type="date" required></label>
+      <label>Description<input id="description" type="text" placeholder="e.g. Sale" required></label>
+      <label>Debit Account<select id="debitAccount" required></select></label>
+      <label>Debit Amount<input id="debitAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+      <label>Credit Account<select id="creditAccount" required></select></label>
+      <label>Credit Amount<input id="creditAmount" type="number" min="0.01" step="0.01" inputmode="decimal" required></label>
+      <div id="validation" class="validation"></div>
+      <button class="primary big" type="submit">Save Transaction</button>
+    </form>
+  </section>
+
+  <section id="transactions" class="screen">
+    <div class="section-head"><h2>Transactions</h2><button class="primary small" data-go="entry">＋ Add</button></div>
+    <div id="allTransactions"></div>
+  </section>
+
+  <section id="reports" class="screen">
+    <div class="section-head"><h2>Reports</h2></div>
+    <div class="report-tabs">
+      <button data-report="gl">General Ledger</button>
+      <button data-report="tb">Trial Balance</button>
+      <button data-report="is">Income Statement</button>
+      <button data-report="bs">Balance Sheet</button>
+      <button data-report="checks">Checks</button>
+    </div>
+    <div id="reportBody"></div>
+  </section>
+
+  <section id="coa" class="screen">
+    <div class="section-head"><h2>Chart of Accounts</h2></div>
+    <div id="coaBody"></div>
+  </section>
+
+  <section id="backup" class="screen">
+    <div class="section-head"><h2>Backup & Restore</h2></div>
+    <p class="muted">Your data is stored on this device. Export a backup regularly.</p>
+    <button id="exportBtn" class="primary big">Export Backup</button>
+    <label class="filebtn">Restore Backup<input id="importFile" type="file" accept=".json"></label>
+    <button id="resetBtn" class="danger">Reset to sample data</button>
+  </section>
+</main>
+
+<nav class="bottom-nav">
+  <button data-go="dashboard">⌂<span>Home</span></button>
+  <button data-go="transactions">▤<span>Journal</span></button>
+  <button data-go="reports">▥<span>Reports</span></button>
+  <button data-go="coa">☷<span>COA</span></button>
+  <button data-go="backup">⋯<span>More</span></button>
+</nav>
+<script src="app.js"></script>
+</body>
+</html>
