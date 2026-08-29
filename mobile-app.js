@@ -12,9 +12,10 @@
     document.querySelectorAll('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === id));
     document.querySelectorAll('.bottom-nav button').forEach((button) => button.classList.toggle('active', button.dataset.go === id));
     if (id === 'dashboard') renderDashboard();
+    if (id === 'company') renderCompanyManagement();
     if (id === 'journal') renderJournal();
     if (id === 'coa') renderAccounts();
-    if (id === 'reports') renderReports('checks');
+    if (id === 'reports') renderReports('tb');
     if (id === 'arap') renderARAP();
     if (id === 'more') renderMore();
   }
@@ -23,6 +24,14 @@
     byId('setupStatus').textContent = '';
     document.querySelectorAll('.screen').forEach((screen) => screen.classList.toggle('active', screen.id === 'setup'));
     byId('appShell').classList.add('hidden');
+  }
+
+  function renderCompanyManagement() {
+    const companies = app.listCompanies();
+    const currentCompany = app.getCurrentCompany();
+    byId('companySummary').innerHTML = currentCompany ? `Current company: <strong>${currentCompany.name}</strong> (${currentCompany.businessType || 'Other'})` : 'No company selected';
+    byId('companySwitcher').innerHTML = companies.map((company) => `<option value="${company.id}" ${company.id === currentCompany?.id ? 'selected' : ''}>${company.name}</option>`).join('');
+    byId('companyList').innerHTML = companies.map((company) => `<div class="tx"><div><div class="desc">${company.name}</div><small>${company.code} • ${company.businessType || 'Other'}</small></div><div class="num"><button data-company-edit="${company.id}" class="ghost small">Edit</button><button data-company-archive="${company.id}" class="ghost small">Archive</button></div></div>`).join('') || '<p class="muted">No companies yet.</p>';
   }
 
   function renderDashboard() {
@@ -51,13 +60,25 @@
     const debit = byId('journalDebit');
     const credit = byId('journalCredit');
     if (debit && !debit.dataset.ready) { debit.innerHTML = accountOptions(); credit.innerHTML = accountOptions(); debit.dataset.ready = '1'; }
-    byId('journalRows').innerHTML = app.transactionService.listTransactions(company.id).map((entry) => `<div class="tx"><div><div class="desc">${entry.description}</div><small>${entry.date} • ${entry.status}</small></div><div class="num">${money(app.transactionService.getTransactionTotal(entry))}</div></div>`).join('') || '<p class="muted">No journal entries yet.</p>';
+    const entries = app.companyService.engine.getPostedEntries(company.id);
+    byId('journalRows').innerHTML = entries.map((entry) => {
+      const debitLine = entry.lines.find((line) => line.entryType === window.EntryType?.DEBIT || line.entryType === 'debit');
+      const creditLine = entry.lines.find((line) => line.entryType === window.EntryType?.CREDIT || line.entryType === 'credit');
+      const debitAccount = debitLine ? app.companyService.engine.getAccountById(debitLine.accountId)?.title || debitLine.accountTitle || 'Account' : '—';
+      const creditAccount = creditLine ? app.companyService.engine.getAccountById(creditLine.accountId)?.title || creditLine.accountTitle || 'Account' : '—';
+      const totalDebit = entry.lines.filter((line) => line.entryType === 'debit').reduce((sum, line) => sum + Number(line.amount || 0), 0);
+      const totalCredit = entry.lines.filter((line) => line.entryType === 'credit').reduce((sum, line) => sum + Number(line.amount || 0), 0);
+      return `<div class="tx"><div><div class="desc">${entry.description}</div><small>${entry.date} • ${entry.status}</small><br><small>${debitAccount} ${money(totalDebit)} / ${creditAccount} ${money(totalCredit)}</small></div><div class="num">${money(totalDebit)}<br><small>${totalDebit === totalCredit ? 'BALANCED' : 'REVIEW'}</small></div></div>`;
+    }).join('') || '<p class="muted">No journal entries yet.</p>';
   }
 
   function renderAccounts() {
     const company = app.getCurrentCompany();
     if (!company) return;
-    byId('coaRows').innerHTML = app.companyService.engine.getCompanyAccounts(company.id).map((account) => `<tr><td>${account.code}</td><td>${account.title}</td><td>${account.type}</td><td>${account.archived ? 'Archived' : 'Active'}</td></tr>`).join('');
+    const search = (byId('coaSearch')?.value || '').toLowerCase();
+    const typeFilter = byId('coaTypeFilter')?.value || 'ALL';
+    const accounts = app.companyService.listAccounts(company.id, search, typeFilter);
+    byId('coaRows').innerHTML = `<table class="table"><thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Normal</th><th>Status</th><th>Balance</th><th>Action</th></tr></thead><tbody>${accounts.map((account) => `<tr><td>${account.code}</td><td>${account.title}</td><td>${account.type}</td><td>${account.normalBalance}</td><td>${account.archived ? 'Archived' : 'Active'}</td><td>${money(app.companyService.getCurrentAccountBalance(account.id))}</td><td><button data-edit-account="${account.id}" class="ghost small">Edit</button> <button data-archive-account="${account.id}" class="ghost small">Archive</button></td></tr>`).join('')}</tbody></table>` || '<p class="muted">No accounts yet.</p>';
     byId('coaCompany').textContent = company.name;
     const type = byId('accountType');
     if (type && !type.dataset.ready) { type.innerHTML = Object.values(window.AccountType).map((value) => `<option>${value}</option>`).join(''); type.dataset.ready = '1'; }
@@ -73,6 +94,10 @@
     if (kind === 'is') data = report.getIncomeStatement(company.id);
     if (kind === 'bs') data = report.getBalanceSheet(company.id);
     if (kind === 'checks') data = report.getTrialBalance(company.id);
+    if (kind === 'tb' && data && Array.isArray(data.rows)) {
+      byId('reportBody').innerHTML = `<h3>Trial Balance</h3><table class="table"><thead><tr><th>Code</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead><tbody>${data.rows.map((row) => `<tr><td>${row.code}</td><td>${row.title}</td><td>${money(row.debit)}</td><td>${money(row.credit)}</td></tr>`).join('')}</tbody><tfoot><tr><th colspan="2">Total</th><th>${money(data.totalDebit)}</th><th>${money(data.totalCredit)}</th></tr></tfoot></table><p class="validation">${data.validation?.message || (Math.abs(data.difference) < 0.01 ? 'Accounting reports balanced' : 'Report validation failed')}</p>`;
+      return;
+    }
     byId('reportBody').innerHTML = `<h3>${kind.toUpperCase()}</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
   }
 
@@ -114,14 +139,57 @@
   }
 
   function bind() {
-    document.addEventListener('click', (event) => { const button = event.target.closest('[data-go]'); if (button) { event.preventDefault(); show(button.dataset.go); } });
+    document.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-go]');
+      if (button) { event.preventDefault(); show(button.dataset.go); }
+      const editAccountId = event.target.closest('[data-edit-account]');
+      if (editAccountId) {
+        const account = app.companyService.getAccountById(editAccountId.dataset.editAccount);
+        if (account) {
+          byId('accountForm').accountId.value = account.id;
+          byId('accountForm').code.value = account.code;
+          byId('accountForm').title.value = account.title;
+          byId('accountForm').description.value = account.description || '';
+          byId('accountForm').type.value = account.type;
+        }
+      }
+      const archiveAccountId = event.target.closest('[data-archive-account]');
+      if (archiveAccountId) {
+        app.companyService.archiveAccount(archiveAccountId.dataset.archiveAccount, 'mobile');
+        renderAccounts();
+      }
+      const companyEditId = event.target.closest('[data-company-edit]');
+      if (companyEditId) {
+        const company = app.companyService.getCompanyById(companyEditId.dataset.companyEdit);
+        if (company) {
+          byId('companyForm').name.value = company.name;
+          byId('companyForm').code.value = company.code;
+          byId('companyForm').businessType.value = company.businessType || 'Other';
+          byId('companyForm').businessAddress.value = company.businessAddress || '';
+          byId('companyForm').email.value = company.email || '';
+          byId('companyStatus').textContent = `Editing ${company.name}`;
+        }
+      }
+      const companyArchiveId = event.target.closest('[data-company-archive]');
+      if (companyArchiveId) {
+        app.companyService.archiveCompany(companyArchiveId.dataset.companyArchive, 'mobile');
+        renderCompanyManagement();
+      }
+    });
     document.querySelectorAll('[data-report]').forEach((button) => button.addEventListener('click', () => renderReports(button.dataset.report)));
     document.querySelectorAll('[data-phase8-action]').forEach((button) => button.addEventListener('click', () => phase8Action(button.dataset.phase8Action)));
     byId('setupForm').addEventListener('submit', (event) => { event.preventDefault(); try { const data = Object.fromEntries(new FormData(event.target)); const company = app.initializeCompany(data); const templates = window.DEFAULT_ACCOUNT_TEMPLATES[company.businessType] || window.DEFAULT_ACCOUNT_TEMPLATES.Other || []; templates.forEach((item) => app.companyService.createAccount(company.id, { code: item.code, title: item.title, type: item.type, createdBy: 'mobile' })); byId('appShell').classList.remove('hidden'); show('dashboard'); } catch (error) { byId('setupStatus').textContent = error.message; } });
+    byId('companyForm').addEventListener('submit', (event) => { event.preventDefault(); try { const data = Object.fromEntries(new FormData(event.target)); const existing = data.name ? app.listCompanies().find((company) => company.name.toLowerCase() === String(data.name).trim().toLowerCase()) : null; if (existing) { byId('companyStatus').textContent = 'Company already exists'; return; }
+      const company = app.initializeCompany(data); byId('companyStatus').textContent = `Created ${company.name}`; renderCompanyManagement(); byId('appShell').classList.remove('hidden'); show('dashboard');
+    } catch (error) { byId('companyStatus').textContent = error.message; } });
+    byId('switchCompanyBtn').addEventListener('click', () => { const value = byId('companySwitcher').value; if (!value) return; app.switchCompany(value); show('dashboard'); renderCompanyManagement(); });
     byId('journalForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); try { app.createJournalEntry(app.getCurrentCompany().id, { description: data.description, date: data.date, lines: [{ accountId: data.debit, entryType: 'debit', amount: Number(data.amount) }, { accountId: data.credit, entryType: 'credit', amount: Number(data.amount) }] }); event.target.reset(); renderJournal(); renderDashboard(); } catch (error) { byId('journalStatus').textContent = error.message; } });
     byId('customerForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); app.arapService.createCustomer(app.getCurrentCompany().id, data); event.target.reset(); renderARAP(); });
     byId('vendorForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); app.arapService.createVendor(app.getCurrentCompany().id, data); event.target.reset(); renderARAP(); });
-    byId('accountForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); try { app.companyService.createAccount(app.getCurrentCompany().id, data); event.target.reset(); renderAccounts(); renderJournal(); } catch (error) { byId('accountStatus').textContent = error.message; } });
+    byId('accountForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); try { if (data.accountId) { app.companyService.updateAccount(data.accountId, { code: data.code, title: data.title, type: data.type, description: data.description, modifiedBy: 'mobile' }); } else { app.companyService.createAccount(app.getCurrentCompany().id, { code: data.code, title: data.title, type: data.type, description: data.description, createdBy: 'mobile' }); } event.target.reset(); renderAccounts(); renderJournal(); } catch (error) { byId('accountStatus').textContent = error.message; } });
+    byId('clearAccountForm').addEventListener('click', () => { byId('accountForm').reset(); byId('accountForm').accountId.value = ''; });
+    byId('coaSearch').addEventListener('input', renderAccounts);
+    byId('coaTypeFilter').addEventListener('change', renderAccounts);
     byId('invoiceForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); try { const account = app.companyService.engine.getCompanyAccounts(app.getCurrentCompany().id).find((item) => item.type === 'REVENUE'); app.arapService.createInvoice(app.getCurrentCompany().id, { customerId: data.customerId, invoiceNumber: data.invoiceNumber, invoiceDate: today(), dueDate: data.dueDate, items: [{ description: data.description, amount: Number(data.amount), revenueAccount: account?.id }] }); event.target.reset(); renderARAP(); } catch (error) { byId('arapStatus').textContent = error.message; } });
     byId('billForm').addEventListener('submit', (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target)); try { const account = app.companyService.engine.getCompanyAccounts(app.getCurrentCompany().id).find((item) => item.type === 'EXPENSE'); app.arapService.createBill(app.getCurrentCompany().id, { vendorId: data.vendorId, billNumber: data.billNumber, billDate: today(), dueDate: data.dueDate, items: [{ description: data.description, amount: Number(data.amount), expenseAccount: account?.id }] }); event.target.reset(); renderARAP(); } catch (error) { byId('arapStatus').textContent = error.message; } });
     byId('exportBtn').addEventListener('click', () => { const backup = app.getCompanySnapshot(app.getCurrentCompany().id); const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([JSON.stringify(backup.backup, null, 2)], { type: 'application/json' })); link.download = `${app.getCurrentCompany().code}-backup.json`; link.click(); URL.revokeObjectURL(link.href); });
@@ -133,6 +201,7 @@
     if (!ApplicationService || !Phase8OperationsService) return;
     app = new ApplicationService(); phase8 = new Phase8OperationsService(); phase8.companyService = app.companyService; phase8.engine = app.companyService.engine; bind();
     if (app.getCurrentCompany()) { byId('appShell').classList.remove('hidden'); show('dashboard'); } else renderSetup();
+    renderCompanyManagement();
   }
   start();
 })();
