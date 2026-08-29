@@ -25,6 +25,14 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
       - name: Install Capacitor
         run: |
           npm init -y

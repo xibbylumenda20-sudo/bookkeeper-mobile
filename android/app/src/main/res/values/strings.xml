@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Bookkeeper Mobile</string>
+    <string name="title_activity_main">Bookkeeper Mobile</string>
+    <string name="package_name">com.bookkeeper.mobile</string>
+    <string name="custom_url_scheme">com.bookkeeper.mobile</string>
+</resources>
