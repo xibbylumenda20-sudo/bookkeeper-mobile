@@ -1,3 +1,4 @@
+
 name: Build Bookkeeper APK
 
 on:
@@ -30,13 +31,22 @@ jobs:
           npm init -y
           npm install @capacitor/core @capacitor/cli @capacitor/android
 
+      - name: Prepare web files
+        run: |
+          mkdir -p www
+          cp index.html www/
+          cp style.css www/
+          cp app.js www/
+          cp manifest.json www/
+          cp service-worker.js www/
+
       - name: Create Capacitor config
         run: |
           cat > capacitor.config.json <<'EOF'
           {
             "appId": "com.bookkeeper.mobile",
             "appName": "Bookkeeper Mobile",
-            "webDir": "."
+            "webDir": "www"
           }
           EOF
 
