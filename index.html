@@ -75,6 +75,12 @@
     <button id="exportBtn" class="primary big">Export Backup</button>
     <label class="filebtn">Restore Backup<input id="importFile" type="file" accept=".json"></label>
     <button id="resetBtn" class="danger">Reset to sample data</button>
+    <div class="section-title">Accounting Controls</div>
+    <button class="primary big" data-phase8-action="reconciliation">Bank Reconciliation</button>
+    <button class="primary big" data-phase8-action="adjusting">Adjusting Entries</button>
+    <button class="primary big" data-phase8-action="closing">Period Closing</button>
+    <button class="primary big" data-phase8-action="audit">Audit Trail</button>
+    <div id="phase8Status" class="validation"></div>
   </section>
 </main>
 
@@ -85,6 +91,9 @@
   <button data-go="coa">☷<span>COA</span></button>
   <button data-go="backup">⋯<span>More</span></button>
 </nav>
+<script src="accounting-engine.js"></script>
+<script src="company-setup.js"></script>
+<script src="phase8-operations.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

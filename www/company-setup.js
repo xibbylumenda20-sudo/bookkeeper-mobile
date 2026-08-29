@@ -5,7 +5,7 @@ const {
   Company,
   Account,
   NormalBalance,
-} = require('./accounting-engine.js');
+} = typeof module !== 'undefined' && module.exports ? require('./accounting-engine.js') : window;
 
 const STORAGE_VERSION = 1;
 

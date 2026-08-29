@@ -62,10 +62,158 @@ function renderReport(kind){
  reportBody.innerHTML=`<h3>${title}</h3>${body}`;
 }
 function renderCOA(){coaBody.innerHTML=table(["Code","Account","Type"],COA.map(c=>`<tr><td>${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td></tr>`))}
-function renderAll(){renderDashboard();renderTransactions();renderCOA();renderReport("checks")}
+
+function getPhase8Runtime() {
+ const CompanySetupService = window.CompanySetupService;
+ const Phase8OperationsService = window.Phase8OperationsService;
+ if (!CompanySetupService || !Phase8OperationsService) {
+	 return null;
+ }
+
+ if (!window.__bookkeeperUIRuntime) {
+	 const companyService = new CompanySetupService('bookkeeper_mobile_company_setup_v1');
+	 if (!companyService.getActiveCompany()) {
+		 companyService.createCompany({ name: 'Main Company', businessType: 'Service', createdBy: 'mobile-ui' });
+	 }
+
+	 const activeCompany = companyService.getActiveCompany();
+	 const accountSeeds = [
+		 { code: '1000', title: 'Cash', type: 'ASSET' },
+		 { code: '2000', title: 'Accounts Payable', type: 'LIABILITY' },
+		 { code: '3000', title: "Owner's Capital", type: 'EQUITY' },
+		 { code: '4000', title: 'Service Revenue', type: 'REVENUE' },
+		 { code: '5100', title: 'Rent Expense', type: 'EXPENSE' },
+	 ];
+
+	 const existingAccounts = companyService.engine.getCompanyAccounts(activeCompany.id);
+	 for (const seed of accountSeeds) {
+		 if (!existingAccounts.some((account) => account.code === seed.code || account.title === seed.title)) {
+			 companyService.createAccount(activeCompany.id, { ...seed, createdBy: 'mobile-ui' });
+		 }
+	 }
+
+	 const operations = new Phase8OperationsService('bookkeeper_mobile_phase8_v1');
+	 operations.companyService = companyService;
+	 operations.engine = companyService.engine;
+
+	 let bankAccount = operations.engine.bankAccounts.find((record) => record.companyId === activeCompany.id);
+	 if (!bankAccount) {
+		 const cashAccount = companyService.engine.getCompanyAccounts(activeCompany.id).find((account) => account.title === 'Cash' || account.code === '1000');
+		 bankAccount = operations.createBankAccount(activeCompany.id, {
+			 name: 'Primary Checking',
+			 accountNumber: '1001',
+			 type: 'checking',
+			 balance: 50000,
+			 createdBy: 'mobile-ui',
+			 ledgerAccountId: cashAccount ? cashAccount.id : null,
+		 });
+	 }
+
+	 if (!operations.engine.reconciliations.some((record) => record.companyId === activeCompany.id)) {
+		 operations.createReconciliation(activeCompany.id, bankAccount.id, {
+			 statementDate: new Date().toISOString().slice(0, 10),
+			 startingBalance: 50000,
+			 endingBalance: 50000,
+			 bookBalance: 50000,
+			 outstandingItems: 0,
+			 notes: 'Initial mobile reconciliation',
+			 createdBy: 'mobile-ui',
+		 });
+	 }
+
+	 window.__bookkeeperUIRuntime = { companyService, operations, engine: companyService.engine, getAuditTrail: (companyId) => operations.getAuditTrail(companyId) };
+ }
+
+ return window.__bookkeeperUIRuntime;
+}
+
+function renderPhase8Status(){
+ const statusEl = document.getElementById('phase8Status');
+ if (!statusEl) return;
+ const runtime = getPhase8Runtime();
+ if (!runtime) {
+	 statusEl.innerHTML = '<strong class="err">Phase 8 services unavailable</strong>';
+	 return;
+ }
+
+ const company = runtime.companyService.getActiveCompany();
+ if (!company) {
+	 statusEl.innerHTML = '<strong class="err">No active company</strong>';
+	 return;
+ }
+
+ const bankAccounts = runtime.engine.bankAccounts.filter((record) => record.companyId === company.id);
+ const reconciliations = runtime.engine.reconciliations.filter((record) => record.companyId === company.id);
+ const closedPeriods = Object.values(company.accountingPeriods || {}).filter((period) => period && period.closed).length;
+ const auditTrail = runtime.getAuditTrail(company.id).slice(0, 3);
+
+ statusEl.innerHTML = ['<b>Phase 8 Status</b><br>', `Company: ${company.name}<br>`, `Bank Accounts: ${bankAccounts.length}<br>`, `Reconciliations: ${reconciliations.length}<br>`, `Closed Periods: ${closedPeriods}<br>`, `Audit Trail: ${auditTrail.length} log entry(s)`].join('');
+}
+
+function executePhase8Action(action) {
+ const runtime = getPhase8Runtime();
+ if (!runtime) return;
+
+ const company = runtime.companyService.getActiveCompany();
+ if (!company) {
+	 if (document.getElementById('phase8Status')) document.getElementById('phase8Status').innerHTML = '<strong class="err">No active company</strong>';
+	 return;
+ }
+
+ try {
+	 const today = new Date().toISOString().slice(0, 10);
+	 const accounts = runtime.engine.getCompanyAccounts(company.id);
+	 const cashAccount = accounts.find((account) => account.title === 'Cash' || account.code === '1000') || accounts[0];
+	 const expenseAccount = accounts.find((account) => account.type === 'EXPENSE') || accounts[0];
+
+	 if (action === 'reconciliation') {
+		 let bankAccount = runtime.engine.bankAccounts.find((record) => record.companyId === company.id);
+		 if (!bankAccount) {
+			 bankAccount = runtime.operations.createBankAccount(company.id, { name: 'Primary Checking', accountNumber: '1001', type: 'checking', balance: 50000, createdBy: 'mobile-ui', ledgerAccountId: cashAccount ? cashAccount.id : null });
+		 }
+		 const reconciliation = runtime.operations.createReconciliation(company.id, bankAccount.id, { statementDate: today, startingBalance: 50000, endingBalance: 50000, bookBalance: 50000, outstandingItems: 0, notes: 'Mobile reconciliation entry', createdBy: 'mobile-ui' });
+		 document.getElementById('phase8Status').innerHTML = `<strong class="ok">Bank Reconciliation</strong><br>status: ${reconciliation.status || 'OPEN'} • difference: ${reconciliation.difference || 0}`;
+		 return;
+	 }
+
+	 if (action === 'adjusting') {
+		 const result = runtime.operations.createAdjustingEntry(company.id, {
+			 description: 'Monthly adjusting entry',
+			 status: 'Draft',
+			 date: today,
+			 createdBy: 'mobile-ui',
+			 lines: [
+				 { accountId: expenseAccount ? expenseAccount.id : cashAccount.id, entryType: 'debit', amount: 100 },
+				 { accountId: cashAccount ? cashAccount.id : expenseAccount.id, entryType: 'credit', amount: 100 },
+			 ],
+		 });
+		 document.getElementById('phase8Status').innerHTML = `<strong class="ok">Adjusting Entry</strong><br>status: ${result.record ? result.record.status : 'Draft'}`;
+		 return;
+	 }
+
+	 if (action === 'closing') {
+		 const period = runtime.operations.closePeriod(company.id, { startDate: '2026-08-01', endDate: '2026-08-31', closingDate: today, reason: 'Monthly close from mobile UI', closedBy: 'mobile-ui' });
+		 document.getElementById('phase8Status').innerHTML = `<strong class="ok">Period Closing</strong><br>${period.startDate} to ${period.endDate}`;
+		 return;
+	 }
+
+	 if (action === 'audit') {
+		 const trail = runtime.getAuditTrail(company.id).slice(0, 5);
+		 document.getElementById('phase8Status').innerHTML = '<strong class="ok">Audit Trail</strong><br>' + trail.map((entry) => `${entry.action} • ${entry.message}`).join('<br>');
+		 return;
+	 }
+ } catch (error) {
+	 document.getElementById('phase8Status').innerHTML = `<strong class="err">${error.message}</strong>`;
+ }
+}
+
+function renderAll(){renderDashboard();renderTransactions();renderCOA();renderReport("checks");renderPhase8Status();}
 txForm.addEventListener("input",renderValidation);
 txForm.addEventListener("submit",e=>{e.preventDefault();let t={id:nextId(),date:date.value,description:description.value.trim(),debit:debitAccount.value,debitAmount:+debitAmount.value,credit:creditAccount.value,creditAmount:+creditAmount.value};let v=validTx(t);if(!v.ready){renderValidation();return}state.transactions.push(t);save();txForm.reset();date.value=new Date().toISOString().slice(0,10);document.getElementById("validation").innerHTML='<strong class="ok">✓ Saved — READY</strong>';show("dashboard")});
 document.querySelectorAll("[data-report]").forEach(b=>b.addEventListener("click",()=>renderReport(b.dataset.report)));
+document.querySelectorAll("[data-phase8-action]").forEach((button) => {
+	button.addEventListener("click", () => executePhase8Action(button.dataset.phase8Action));
+});
 exportBtn.onclick=()=>{let blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="bookkeeper-backup.json";a.click();URL.revokeObjectURL(a.href)};
 importFile.onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!Array.isArray(x.transactions))throw 0;state=x;save();alert("Backup restored.");}catch{alert("Invalid backup file.")}};r.readAsText(f)};
 resetBtn.onclick=()=>{if(confirm("Reset to sample data? This deletes data stored in this browser.")){state={transactions:sample};save()}};
